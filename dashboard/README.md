@@ -1,13 +1,26 @@
 # Onboarding Dashboard
 
-Streamlit app on top of the Managed Agents memory stores.
+Web app on top of the Managed Agents memory stores. Two UIs share the same backend modules:
+
+| URL | UI |
+| --- | --- |
+| `/` | New React + Tailwind UI (`dashboard/web/`) |
+| `/classic/` | Original Streamlit UI (`dashboard/app.py`) |
 
 ```bash
 pip install -r requirements.txt
 export ANTHROPIC_API_KEY=sk-ant-...      # or put it in .env
-streamlit run dashboard/app.py
-python -m pytest -q                      # offline tests for dashboard/core.py
+cd dashboard/web && npm install
+npm run dev                              # API :8000 + Streamlit :8501 + Vite :5173
+# open http://localhost:5173  (classic UI: http://localhost:5173/classic/)
+python -m pytest -q                      # offline tests (core logic + HTTP API)
 ```
+
+`npm run dev` starts all three processes; Vite proxies `/api` to FastAPI and `/classic` to
+Streamlit, so everything lives on one origin. Single-port alternative: `npm run build`, then
+`uvicorn dashboard.server:app --port 8000` serves the built UI (and redirects `/classic` to the
+Streamlit process, `CLASSIC_UI_URL`, default `http://localhost:8501/classic/`). The classic UI
+alone still runs with `streamlit run dashboard/app.py`.
 
 First load provisions an agent, environment and the global `team-knowledge`
 store (IDs cached in `dashboard/.state/`, gitignored). If that store is empty it is
@@ -43,4 +56,7 @@ Access is enforced by the API, not by the prompt.
 
 - `core.py`: pure logic (store registry, attribution, timeline+diffs, briefing parsing/cache key). Tested.
 - `api.py`: Anthropic adapter (provisioning, memory reads, version history, briefing call, sessions).
-- `app.py`: Streamlit UI.
+- `server.py`: FastAPI JSON API for the React UI; agent sessions stream as NDJSON events
+  (`text` / `memory_op` / `error` / `done`). Tested in `tests/test_server.py`.
+- `web/`: React + Tailwind UI (Vite, TypeScript).
+- `app.py`: classic Streamlit UI.

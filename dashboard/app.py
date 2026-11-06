@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import streamlit as st
 
 from dashboard import api
-from dashboard.core import Mode, briefing_cache_key
+from dashboard.core import Mode, briefing_cache_key, ingest_message, new_hire_message
 
 st.set_page_config(page_title="Onboarding Memory", page_icon="🧠", layout="wide")
 
@@ -53,14 +53,6 @@ def render_memory(mem, history_label: str = "Timeline"):
     tab_now.markdown(mem.content)
     with tab_hist:
         render_timeline(GLOBAL, mem)
-
-
-def chat_context(history: list[dict], turns: int = 6) -> str:
-    """Each chat message is a fresh session, so replay recent turns as context."""
-    if not history:
-        return ""
-    lines = [f"{m['role'].upper()}: {m['content']}" for m in history[-turns:]]
-    return "Earlier in this conversation:\n" + "\n".join(lines) + "\n\n"
 
 
 def strip_tool_notes(text: str) -> str:
@@ -114,16 +106,8 @@ def expert_view():
     files = st.file_uploader("…or upload docs", type=["md", "txt"], accept_multiple_files=True)
 
     if st.button("Ingest into team memory", type="primary", disabled=not (note.strip() or files)):
-        docs = "\n\n".join(f"===== DOCUMENT: {f.name} =====\n{f.read().decode()}" for f in files or [])
-        message = (
-            f"{name}, an experienced colleague, is sharing team knowledge. Read the global "
-            "team-knowledge folder first, then create or UPDATE concept files so that new hires "
-            "get the current truth. Where this contradicts existing memory, update the file and "
-            "record the effective date and what changed. Finish with a short bullet summary "
-            "of which files you created/updated.\n\n"
-            + (f"NOTE FROM {name}:\n{note}\n\n" if note.strip() else "")
-            + docs
-        )
+        docs = [(f.name, f.read().decode()) for f in files or []]
+        message = ingest_message(name, note, docs)
         with st.container(border=True):
             stream_into_page(name=name, mode=Mode.EXPERT, message=message, title=f"Ingest by {name}")
         st.success("Team memory updated.")
@@ -184,13 +168,13 @@ def new_hire_view():
         typed = st.chat_input("Ask anything — or tell me how you like answers (e.g. 'bullet points only')")
         question = typed or st.session_state.pop("pending", None)
         if question:
-            context = chat_context(history)
+            message = new_hire_message(name, role, history, question)
             history.append({"role": "user", "content": question})
             st.chat_message("user").markdown(question)
             with st.chat_message("assistant"):
                 answer = stream_into_page(
                     name=name, mode=Mode.NEW_HIRE, title=f"{name} ({role})",
-                    message=f"I'm {name}, a new {role}.\n\n{context}{question}",
+                    message=message,
                 )
             history.append({"role": "assistant", "content": strip_tool_notes(answer)})
 

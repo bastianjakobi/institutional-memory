@@ -1,0 +1,33 @@
+{
+  "name": "onboarding-memory-web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -k -n api,classic,web -c blue,magenta,green \"npm:dev:api\" \"npm:dev:classic\" \"npm:dev:web\"",
+    "dev:api": "cd ../.. && uvicorn dashboard.server:app --port 8000 --reload --reload-dir dashboard",
+    "dev:classic": "cd ../.. && streamlit run dashboard/app.py --server.port 8501 --server.baseUrlPath classic --server.headless true",
+    "dev:web": "vite",
+    "build": "tsc -b && vite build",
+    "typecheck": "tsc -b",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "lucide-react": "^1.70.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/typography": "^0.5.20",
+    "@tailwindcss/vite": "^4.3.4",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.2.1",
+    "concurrently": "^10.0.6",
+    "tailwindcss": "^4.3.4",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.6"
+  }
+}
