@@ -198,8 +198,12 @@ def _store_resource(store_id: str, access: str, instructions: str) -> Any:
 SESSION_END_EVENTS = {"session.status_idle", "session.status_terminated", "session.error"}
 
 
-def run_session(*, name: str, mode: Mode, message: str, title: str) -> Iterator[str]:
-    """Start a Managed Agent session for this person and stream back text (and memory-op notes).
+def session_events(*, name: str, mode: Mode, message: str, title: str) -> Iterator[dict]:
+    """Start a Managed Agent session for this person and stream typed events:
+
+    {"type": "text", "text": ...}            agent prose
+    {"type": "memory_op", "tool": ..., "path": ...}   a tool call touching /mnt/memory
+    {"type": "error", "event": ...}          session ended abnormally (terminated / error)
 
     Mode.EXPERT:   global store read_write.
     Mode.NEW_HIRE: global store read_only + personal store read_write.
@@ -238,13 +242,24 @@ def run_session(*, name: str, mode: Mode, message: str, title: str) -> Iterator[
             if event.type == "agent.message":
                 for block in event.content:
                     if getattr(block, "type", None) == "text":
-                        yield getattr(block, "text", "")
+                        yield {"type": "text", "text": getattr(block, "text", "")}
             elif event.type == "agent.tool_use":
                 inp = getattr(event, "input", {}) or {}
                 target = str(inp.get("path") or inp.get("file_path") or inp.get("command") or "")
                 if "/mnt/memory" in target:
-                    yield f"\n\n`🧠 {getattr(event, 'name', 'tool')}: {target[:120]}`\n\n"
+                    yield {"type": "memory_op", "tool": getattr(event, "name", "tool"), "path": target[:120]}
             elif event.type in SESSION_END_EVENTS:
                 if event.type != "session.status_idle":
-                    yield f"\n\n⚠️ Session ended: `{event.type}`"
+                    yield {"type": "error", "event": event.type}
                 break
+
+
+def run_session(*, name: str, mode: Mode, message: str, title: str) -> Iterator[str]:
+    """`session_events` rendered as markdown chunks (used by the classic Streamlit UI)."""
+    for e in session_events(name=name, mode=mode, message=message, title=title):
+        if e["type"] == "text":
+            yield e["text"]
+        elif e["type"] == "memory_op":
+            yield f"\n\n`🧠 {e['tool']}: {e['path']}`\n\n"
+        else:
+            yield f"\n\n⚠️ Session ended: `{e['event']}`"

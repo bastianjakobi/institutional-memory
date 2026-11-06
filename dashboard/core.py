@@ -136,3 +136,32 @@ def briefing_cache_key(role: str, memory_hashes: dict[str, str]) -> str:
     """Stable key that changes whenever the role or any global memory changes."""
     payload = json.dumps([role, sorted(memory_hashes.items())])
     return hashlib.sha256(payload.encode()).hexdigest()
+
+
+# --------------------------------------------------------------------------- prompts shared by both UIs
+
+
+def ingest_message(name: str, note: str, docs: list[tuple[str, str]]) -> str:
+    """Prompt for an expert ingest session: optional free-text note plus (filename, text) docs."""
+    body = "\n\n".join(f"===== DOCUMENT: {fname} =====\n{text}" for fname, text in docs)
+    return (
+        f"{name}, an experienced colleague, is sharing team knowledge. Read the global "
+        "team-knowledge folder first, then create or UPDATE concept files so that new hires "
+        "get the current truth. Where this contradicts existing memory, update the file and "
+        "record the effective date and what changed. Finish with a short bullet summary "
+        "of which files you created/updated.\n\n"
+        + (f"NOTE FROM {name}:\n{note}\n\n" if note.strip() else "")
+        + body
+    )
+
+
+def chat_context(history: list[dict], turns: int = 6) -> str:
+    """Each chat message is a fresh session, so replay recent turns as context."""
+    if not history:
+        return ""
+    lines = [f"{m['role'].upper()}: {m['content']}" for m in history[-turns:]]
+    return "Earlier in this conversation:\n" + "\n".join(lines) + "\n\n"
+
+
+def new_hire_message(name: str, role: str, history: list[dict], question: str) -> str:
+    return f"I'm {name}, a new {role}.\n\n{chat_context(history)}{question}"
